@@ -56,6 +56,7 @@ def main():
     sampling_rate = 0.2
     beta0 = 0.9
     beta1 = 0.999
+    k = 3
 
     # Model Paramters
     aggregation = "softmax"
@@ -108,7 +109,7 @@ def main():
         criterion = BCEWithLogitsLoss()
         optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
     elif loss_fn == "compauc":
-        criterion = CompositionalAUCLoss(k=3)
+        criterion = CompositionalAUCLoss(k=k)
         optimizer = PDSCA(model.parameters(), lr=learning_rate, weight_decay=weight_decay, loss_fn=criterion, beta1=beta0, beta2=beta1, margin=margin, epoch_decay=epoch_decay, version="v2")
     train_log = []
     valid_log = []
