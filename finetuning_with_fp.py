@@ -1,26 +1,67 @@
 import torch
 import logging
+import os
 import matplotlib.pyplot as plt
+import numpy as np
+import statistics
 from tqdm import tqdm
 from ogb.graphproppred import PygGraphPropPredDataset, Evaluator
 from torch_geometric.loader import DataLoader
-from libauc.utils import set_all_seeds
+from torch_geometric.seed import seed_everything
 from libauc.losses import AUCMLoss, CompositionalAUCLoss
 from libauc.optimizers import PESG, PDSCA
 from torch.nn import BCEWithLogitsLoss
 from libauc.models import DeeperGCN
 from libauc.sampler import DualSampler
 
+class DeeperGCNfp(torch.nn.Module):
+    def __init__(self, num_tasks: int,
+        emb_dim: int,
+        num_layers: int,
+        graph_pooling = "mean",
+        dropout: float = 0.0,
+        aggr = 'softmax',
+        t: float = 0.1,
+        learn_t: bool = True,
+        p: float = 1.0,
+        learn_p: bool = False,
+        block: str = 'res+',
+        act = "relu",
+        norm = 'BatchNorm',
+        ):
+        super().__init__()
+        self.dgcn = DeeperGCN(num_tasks=num_tasks,
+                              emb_dim=emb_dim,
+                              num_layers=num_layers,
+                              graph_pooling=graph_pooling,
+                              dropout=dropout,
+                              aggr=aggr,
+                              t=t,
+                              learn_t=learn_t,
+                              p=p,
+                              learn_p=learn_p,
+                              block=block,
+                              act=act,
+                              norm=norm)
+        self.beta = torch.nn.Parameter(torch.Tensor([0.5]), requires_grad=True)
+
+    def forward(self, x, edge_index, edge_attr, batch, rf_pred):
+        dgcn_pred = self.dgcn(x, edge_index, edge_attr, batch)
+        return (1-self.beta)*torch.sigmoid(dgcn_pred).reshape(-1, 1) + (self.beta) * rf_pred.reshape(-1,1)
+
 def train(model, device, loader, optimizer, criterion):
     model.train()
-
+    loss_list = []
     for step, batch in enumerate(tqdm(loader, desc="Iteration")):
         batch = batch.to(device)
         optimizer.zero_grad()
-        pred = torch.sigmoid(model(batch.x, batch.edge_index, batch.edge_attr, batch.batch))
-        loss = criterion(pred.to(torch.float32), batch.y.to(torch.float32))
+        pred = torch.sigmoid(model(batch.x, batch.edge_index, batch.edge_attr, batch.batch, batch.y[:, 2]))
+        loss = criterion(pred.to(torch.float32), batch.y[:,0:1].to(torch.float32).reshape(-1, 1))
         loss.backward()
         optimizer.step()
+        loss_list.append(loss.item())
+    return statistics.mean(loss_list)
+
 
 
 @torch.no_grad()
@@ -30,8 +71,8 @@ def eval(model, device, loader, evaluator):
     y_pred = []
     for step, batch in enumerate(tqdm(loader, desc="Iteration")):
         batch = batch.to(device)
-        pred = torch.sigmoid(model(batch.x, batch.edge_index, batch.edge_attr, batch.batch))
-        y_true.append(batch.y.view(pred.shape).detach().cpu())
+        pred = torch.sigmoid(model(batch.x, batch.edge_index, batch.edge_attr, batch.batch, batch.y[:, 2]))
+        y_true.append(batch.y[:,0:1].view(pred.shape).detach().cpu())
         y_pred.append(pred.detach().cpu())
     y_true = torch.cat(y_true, dim=0).numpy()
     y_pred = torch.cat(y_pred, dim=0).numpy()
@@ -44,7 +85,7 @@ def main():
     logging.basicConfig(level=logging.INFO)
 
     # Training Parameters
-    loss_fn = "aucm"
+    loss_fn = "compauc"
     load_pretrained_model = False
     batch_size = 512
     learning_rate = 0.1
@@ -52,10 +93,11 @@ def main():
     margin = 1.0
     epoch_decay = 0.002
     epochs = 200
-    decay_epochs = [int(epochs * 0.5), int(epochs * 0.75)]
-    sampling_rate = 0.2
+    decay_epochs = [int(epochs * 0.33), int(epochs * 0.66)]
+    sampling_rate = 0.5
     beta0 = 0.9
     beta1 = 0.999
+    seed = 0
 
     # Model Paramters
     aggregation = "softmax"
@@ -66,10 +108,14 @@ def main():
     dropout = 0.2
 
 
-    set_all_seeds(0)
+    seed_everything(seed)
     device = torch.device("cuda:0")
     dataset = PygGraphPropPredDataset(name="ogbg-molhiv")
 
+    npy = os.listdir('rf_preds')[seed]
+    rf_pred = np.load(os.path.join('rf_preds', npy))
+    print(npy)
+    dataset.data.y = torch.cat((dataset.data.y, torch.from_numpy(rf_pred)), 1)
 
     split_idx = dataset.get_idx_split()
     train_set = dataset[split_idx["train"]]
@@ -82,7 +128,7 @@ def main():
 
     evaluator = Evaluator(name="ogbg-molhiv")
 
-    model = DeeperGCN(num_tasks=dataset.num_tasks,
+    model = DeeperGCNfp(num_tasks=dataset.num_tasks,
                       emb_dim=hidden_size,
                       num_layers=num_layers,
                       dropout=dropout,
@@ -96,9 +142,14 @@ def main():
     logging.info(model)
 
     if load_pretrained_model:
-        PATH = 'pretrained_model.pth'
+        PATH = 'best_model.pth'
         state_dict = torch.load(PATH)
-        msg = model.load_state_dict(state_dict, False)
+        prefix = "dgcn."
+        new_state_dict = {}
+        for k, v in state_dict.items():
+            new_k = prefix + k
+            new_state_dict[new_k] = v
+        msg = model.load_state_dict(new_state_dict, False)
         print(msg)
 
     if loss_fn == "aucm":
@@ -133,14 +184,15 @@ def main():
 
         logging.info({'Train': train_result,
                      'Validation': valid_result,
-                     'Test': test_result})
+                     'Test': test_result,
+                      "Train Loss": epoch_loss})
         train_log.append(train_result)
         valid_log.append(valid_result)
         test_log.append(test_result)
         if valid_result > best_valid:
             best_valid = valid_result
             final_test = test_result
-            torch.save(model.state_dict(), 'best_model.pth')
+            torch.save(model.state_dict(), 'best_model_fp.pth')
     print(best_valid)
     print(final_test)
     plt.plot(train_log, label='Train')

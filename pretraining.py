@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 from ogb.graphproppred import PygGraphPropPredDataset, Evaluator
 from torch_geometric.loader import DataLoader
-from torch_geometric.seed import seed_everything
+from libauc.utils import set_all_seeds
 from libauc.losses import AUCMLoss
 from libauc.optimizers import PESG
 from torch.nn import BCELoss
@@ -42,43 +42,53 @@ def main():
     logging.getLogger(__name__)
     logging.basicConfig(level=logging.INFO)
 
+    # Training Parameters
     loss_fn = "ce"
-    aggregation = "softmax"
     batch_size = 32
-    hidden_size = 64
-    num_layers = 7
     learning_rate = 0.0001
-    dropout = 0.2
     weight_decay = 0.00001
     margin = 1.0
-    epoch_decay = 0.003
-    epochs = 100
-    decay_epochs = [int(epochs*0.33), int(epochs*0.66)]
+    epoch_decay = 0.002
+    epochs = 300
+    decay_epochs = [int(epochs * 0.5), int(epochs * 0.75)]
     sampling_rate = 0.2
+    seed = 0
 
-    seed_everything(0)
+    # Model Parameters
+    aggregation = "softmax"
+    t = 1.0
+    p = 2.0
+    hidden_size = 256
+    num_layers = 7
+    dropout = 0.2
+
+    set_all_seeds(seed)
     device = torch.device("cuda:0")
     dataset = PygGraphPropPredDataset(name="ogbg-molhiv")
-
+    set_all_seeds(seed)
 
     split_idx = dataset.get_idx_split()
     train_set = dataset[split_idx["train"]]
     valid_set = dataset[split_idx["valid"]]
     test_set = dataset[split_idx["test"]]
     # sampler = DualSampler(train_set, batch_size, sampling_rate=sampling_rate, labels=train_set.y, shuffle=True)
+    set_all_seeds(seed)
     train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
     valid_loader = DataLoader(valid_set, batch_size=batch_size, shuffle=False)
     test_loader = DataLoader(test_set, batch_size=batch_size, shuffle=False)
 
     evaluator = Evaluator(name="ogbg-molhiv")
 
+    set_all_seeds(seed)
     model = DeeperGCN(num_tasks=dataset.num_tasks,
                       emb_dim=hidden_size,
                       num_layers=num_layers,
                       dropout=dropout,
                       aggr=aggregation,
-                      t=1.0,
+                      t=t,
                       learn_t=True,
+                      p=p,
+                      learn_p=True,
                       block="res+"
                       ).to(device)
     logging.info(model)
@@ -99,7 +109,7 @@ def main():
         if epoch in decay_epochs:
             for param_group in optimizer.param_groups:
                 param_group['lr'] = 0.1 * param_group['lr']
-        logging.info("=====Epoch {}".format(epoch))
+        logging.info("Epoch {}".format(epoch))
         logging.info('Training...')
 
         epoch_loss = train(model, device, train_loader, optimizer, criterion)
