@@ -7,7 +7,7 @@ from torch_geometric.loader import DataLoader
 from libauc.utils import set_all_seeds
 from libauc.losses import AUCMLoss, CompositionalAUCLoss
 from libauc.optimizers import PESG, PDSCA
-from torch.nn import BCEWithLogitsLoss
+from torch.nn import BCELoss
 from libauc.models import DeeperGCN
 from libauc.sampler import DualSampler
 
@@ -106,7 +106,7 @@ def main():
         criterion = AUCMLoss()
         optimizer = PESG(model.parameters(), lr=learning_rate, weight_decay=weight_decay, loss_fn=criterion, margin=margin, epoch_decay=epoch_decay)
     elif loss_fn == "ce":
-        criterion = BCEWithLogitsLoss()
+        criterion = BCELoss()
         optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
     elif loss_fn == "compauc":
         criterion = CompositionalAUCLoss(k=k)

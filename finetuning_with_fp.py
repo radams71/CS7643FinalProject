@@ -7,10 +7,10 @@ import statistics
 from tqdm import tqdm
 from ogb.graphproppred import PygGraphPropPredDataset, Evaluator
 from torch_geometric.loader import DataLoader
-from torch_geometric.seed import seed_everything
+from libauc.utils import set_all_seeds
 from libauc.losses import AUCMLoss, CompositionalAUCLoss
 from libauc.optimizers import PESG, PDSCA
-from torch.nn import BCEWithLogitsLoss
+from torch.nn import BCELoss
 from libauc.models import DeeperGCN
 from libauc.sampler import DualSampler
 
@@ -87,18 +87,18 @@ def main():
     # Training Parameters
     loss_fn = "compauc"
     load_pretrained_model = False
-    batch_size = 512
-    learning_rate = 0.1
+    batch_size = 32
+    learning_rate = 0.001
     weight_decay = 0.00001
     margin = 1.0
     epoch_decay = 0.002
-    epochs = 200
+    epochs = 100
     decay_epochs = [int(epochs * 0.33), int(epochs * 0.66)]
     sampling_rate = 0.5
     beta0 = 0.9
     beta1 = 0.999
     seed = 0
-    k = 3
+    k = 5
 
     # Model Paramters
     aggregation = "softmax"
@@ -109,7 +109,7 @@ def main():
     dropout = 0.2
 
 
-    seed_everything(seed)
+    set_all_seeds(seed)
     device = torch.device("cuda:0")
     dataset = PygGraphPropPredDataset(name="ogbg-molhiv")
 
@@ -157,7 +157,7 @@ def main():
         criterion = AUCMLoss()
         optimizer = PESG(model.parameters(), lr=learning_rate, weight_decay=weight_decay, loss_fn=criterion, margin=margin, epoch_decay=epoch_decay)
     elif loss_fn == "ce":
-        criterion = BCEWithLogitsLoss()
+        criterion = BCELoss()
         optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
     elif loss_fn == "compauc":
         criterion = CompositionalAUCLoss(k=k)
