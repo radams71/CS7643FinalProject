@@ -1,3 +1,6 @@
+"""
+Taken from: https://github.com/yzhuoning/DeepAUC_OGB_Challenge
+"""
 import os
 import argparse
 import numpy as np

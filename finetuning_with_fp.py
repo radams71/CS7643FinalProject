@@ -1,3 +1,7 @@
+"""
+Adapted from: https://github.com/yzhuoning/DeepAUC_OGB_Challenge
+"""
+
 import torch
 import logging
 import os

@@ -1,3 +1,7 @@
+"""
+Taken from: https://github.com/yzhuoning/DeepAUC_OGB_Challenge
+"""
+
 import os
 import shutil
 import random

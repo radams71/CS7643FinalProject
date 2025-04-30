@@ -1,3 +1,7 @@
+"""
+Adapted from: https://github.com/yzhuoning/DeepAUC_OGB_Challenge
+"""
+
 import torch
 import logging
 import matplotlib.pyplot as plt
@@ -51,12 +55,13 @@ def main():
     weight_decay = 0.00001
     margin = 1.0
     epoch_decay = 0.002
-    epochs = 200
+    epochs = 100
     decay_epochs = [int(epochs * 0.5), int(epochs * 0.75)]
-    sampling_rate = 0.2
+    sampling_rate = 0.3
     beta0 = 0.9
     beta1 = 0.999
     k = 3
+    seed = 0
 
     # Model Paramters
     aggregation = "softmax"
@@ -67,7 +72,7 @@ def main():
     dropout = 0.2
 
 
-    set_all_seeds(0)
+    set_all_seeds(seed)
     device = torch.device("cuda:0")
     dataset = PygGraphPropPredDataset(name="ogbg-molhiv")
 
@@ -122,6 +127,9 @@ def main():
             optimizer.update_regularizer(decay_factor=10)
         if epoch in decay_epochs and loss_fn == "compauc":
             optimizer.update_regularizer(decay_factor=10, decay_factor0=10)
+        if epoch in decay_epochs and loss_fn == "ce":
+            for param_group in optimizer.param_groups:
+                param_group['lr'] = 0.1 * param_group['lr']
         logging.info("Epoch {}".format(epoch))
         logging.info('Training...')
 
