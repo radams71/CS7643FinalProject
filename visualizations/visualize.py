@@ -109,7 +109,7 @@ def main():
     seed = 0
 
     # Model Paramters
-    aggregation = "std"
+    aggregation = "sum"
     t = 1.0
     p = 1.0
     hidden_size = 64
@@ -175,7 +175,7 @@ def main():
         if batch.y[0][0] == 1:
             break
     data = batch.to(device)
-    print(data.y)
+    print(model(data.x, data.edge_index, data.batch))
     ig = IntegratedGradients(model_forward_edge)
     edge_mask = torch.ones(data.edge_index.shape[1]).requires_grad_(True).to(device)
     edge_attributions = ig.attribute(inputs=edge_mask,

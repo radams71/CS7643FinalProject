@@ -172,7 +172,7 @@ def main():
         if batch.y[0][0] == 1:
             break
     data = batch.to(device)
-    print(data.y)
+    print(model(data.x, data.edge_index, data.edge_attr, data.batch))
     interpretable_embedding = configure_interpretable_embedding_layer(model, "bond_encoder")
     input_emb = interpretable_embedding.indices_to_embeddings(data.edge_attr)
     ig = IntegratedGradients(model_forward_edge)

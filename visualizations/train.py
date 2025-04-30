@@ -33,9 +33,9 @@ class GNN(torch.nn.Module):
     def __init__(self, hidden_size, aggr):
         super(GNN, self).__init__()
         self.embedding = AtomEncoder(hidden_size)
-        self.conv1 = GCNConv(hidden_size, hidden_size, aggr=aggr)
-        self.conv2 = GCNConv(hidden_size, hidden_size, aggr=aggr)
-        self.conv3 = GCNConv(hidden_size, hidden_size, aggr=aggr)
+        self.conv1 = GraphConv(hidden_size, hidden_size, aggr=aggr)
+        self.conv2 = GraphConv(hidden_size, hidden_size, aggr=aggr)
+        self.conv3 = GraphConv(hidden_size, hidden_size, aggr=aggr)
         self.lin = Linear(hidden_size, 1)
 
     def forward(self, x, edge_index, batch, edge_weight=None):
@@ -132,7 +132,7 @@ def main():
     seed = 0
 
     # Model Paramters
-    aggregation = "median"
+    aggregation = "std"
     t = 1.0
     p = 1.0
     hidden_size = 64
@@ -194,43 +194,6 @@ def main():
         out = model(node_mask, data.edge_index, batch)
         return out
 
-    # def explain(method, data, target=0):
-    #     input_mask = torch.ones(data.edge_index.shape[1]).requires_grad_(True).to(device)
-    #     if method == 'ig':
-    #         ig = IntegratedGradients(model_forward)
-    #         mask = ig.attribute(input_mask, target=target,
-    #                             additional_forward_args=(data,),
-    #                             internal_batch_size=data.edge_index.shape[1])
-    #     elif method == 'saliency':
-    #         saliency = Saliency(model_forward)
-    #         mask = saliency.attribute(input_mask, target=target,
-    #                                   additional_forward_args=(data,))
-    #     else:
-    #         raise Exception('Unknown explanation method')
-    #
-    #     edge_mask = np.abs(mask.cpu().detach().numpy())
-    #     if edge_mask.max() > 0:  # avoid division by zero
-    #         edge_mask = edge_mask / edge_mask.max()
-    #     return edge_mask
-    #
-    # def aggregate_edge_directions(edge_mask, data):
-    #     edge_mask_dict = defaultdict(float)
-    #     for val, u, v in list(zip(edge_mask, *data.edge_index)):
-    #         u, v = u.item(), v.item()
-    #         if u > v:
-    #             u, v = v, u
-    #         edge_mask_dict[(u, v)] += val
-    #     return edge_mask_dict
-    #
-    # data = dataset[0].to(device)
-    # mol = to_molecule(data)
-    #
-    # for title, method in [('Integrated Gradients', 'ig')]:
-    #     edge_mask = explain(method, data, target=0)
-    #     edge_mask_dict = aggregate_edge_directions(edge_mask, data)
-    #     plt.figure(figsize=(10, 5))
-    #     plt.title(title)
-    #     draw_molecule(mol, edge_mask_dict)
     data = dataset[0].to(device)
     intepretable_embedding = configure_interpretable_embedding_layer(model, "embedding")
     input_emb = intepretable_embedding.indices_to_embeddings(data.x).unsqueeze(0)
