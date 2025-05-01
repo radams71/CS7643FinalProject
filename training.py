@@ -1,6 +1,7 @@
 """
 Adapted from: https://github.com/yzhuoning/DeepAUC_OGB_Challenge
 """
+import statistics
 
 import torch
 import logging
@@ -17,7 +18,7 @@ from libauc.sampler import DualSampler
 
 def train(model, device, loader, optimizer, criterion):
     model.train()
-
+    loss_list = []
     for step, batch in enumerate(tqdm(loader, desc="Iteration")):
         batch = batch.to(device)
         optimizer.zero_grad()
@@ -25,6 +26,8 @@ def train(model, device, loader, optimizer, criterion):
         loss = criterion(pred.to(torch.float32), batch.y.to(torch.float32))
         loss.backward()
         optimizer.step()
+        loss_list.append(loss.item())
+    return statistics.mean(loss_list)
 
 
 @torch.no_grad()
@@ -43,12 +46,23 @@ def eval(model, device, loader, evaluator):
     result_dict = evaluator.eval(input_dict)
     return result_dict
 
+
+@torch.no_grad()
+def compute_loss(model, device, loader, criterion):
+    loss_list = []
+    for step, batch in enumerate(tqdm(loader, desc="Iteration")):
+        batch = batch.to(device)
+        pred = torch.sigmoid(model(batch.x, batch.edge_index, batch.edge_attr, batch.batch))
+        loss = criterion(pred.to(torch.float32), batch.y.to(torch.float32))
+        loss_list.append(loss.item())
+    return statistics.mean(loss_list)
+
 def main():
     logging.getLogger(__name__)
     logging.basicConfig(level=logging.INFO)
 
     # Training Parameters
-    loss_fn = "aucm"
+    loss_fn = "ce"
     load_pretrained_model = False
     batch_size = 512
     learning_rate = 0.1
@@ -119,6 +133,8 @@ def main():
     train_log = []
     valid_log = []
     test_log = []
+    train_loss = []
+    valid_loss = []
 
     best_valid = 0
     final_test = 0
@@ -134,6 +150,9 @@ def main():
         logging.info('Training...')
 
         epoch_loss = train(model, device, train_loader, optimizer, criterion)
+        train_loss.append(epoch_loss)
+        valid_l = compute_loss(model, device, valid_loader, criterion)
+        valid_loss.append(valid_l)
 
         logging.info('Evaluating...')
         train_result = eval(model, device, train_loader, evaluator)[dataset.eval_metric]
@@ -152,12 +171,10 @@ def main():
             torch.save(model.state_dict(), 'best_model.pth')
     print(best_valid)
     print(final_test)
-    plt.plot(train_log, label='Train')
-    plt.plot(valid_log, label='Validation')
-    plt.plot(test_log, label='Test')
-    plt.show()
-
-
+    torch.save(train_log, "train_log_"+loss_fn+".pt")
+    torch.save(valid_log, "valid_log_" + loss_fn + ".pt")
+    torch.save(valid_log, "train_loss_" + loss_fn + ".pt")
+    torch.save(valid_log, "valid_loss_" + loss_fn + ".pt")
 
 
 if __name__ == '__main__':

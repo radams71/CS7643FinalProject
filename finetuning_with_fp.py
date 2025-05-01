@@ -84,6 +84,7 @@ def eval(model, device, loader, evaluator):
     result_dict = evaluator.eval(input_dict)
     return result_dict
 
+
 def main():
     logging.getLogger(__name__)
     logging.basicConfig(level=logging.INFO)
@@ -92,24 +93,24 @@ def main():
     loss_fn = "compauc"
     load_pretrained_model = False
     batch_size = 32
-    learning_rate = 0.001
+    learning_rate = 0.1
     weight_decay = 0.00001
     margin = 1.0
     epoch_decay = 0.002
     epochs = 100
     decay_epochs = [int(epochs * 0.33), int(epochs * 0.66)]
-    sampling_rate = 0.5
+    sampling_rate = 0.3
     beta0 = 0.9
     beta1 = 0.999
     seed = 0
-    k = 5
+    k = 3
 
     # Model Paramters
     aggregation = "softmax"
     t = 1.0
     p = 2.0
     hidden_size = 256
-    num_layers = 14
+    num_layers = 7
     dropout = 0.2
 
 
@@ -155,6 +156,7 @@ def main():
             new_k = prefix + k
             new_state_dict[new_k] = v
         msg = model.load_state_dict(new_state_dict, False)
+        model.dgcn.graph_pred_linear.reset_parameters()
         print(msg)
 
     if loss_fn == "aucm":
