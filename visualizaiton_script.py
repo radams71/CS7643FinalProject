@@ -1,3 +1,12 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Filename: visualizaiton_script.py
+Author: Pedram Gharani
+Created: 2025-04-22
+Last Modified: 2025-04-29
+
+"""
 import torch
 import matplotlib.pyplot as plt
 from sklearn.metrics import roc_curve, auc
